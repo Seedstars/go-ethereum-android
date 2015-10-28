@@ -1,0 +1,17 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context=".main">
+
+    <item
+        android:id="@+id/keyboard_button"
+        android:icon="@drawable/keyboard"
+        android:title="@string/keyboard_title"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/myswitch"
+        android:title=""
+        app:actionLayout="@layout/switch_action_item"
+        app:showAsAction="always" />
+
+</menu>
