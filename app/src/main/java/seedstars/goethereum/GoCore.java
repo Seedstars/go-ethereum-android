@@ -3,6 +3,7 @@ package seedstars.goethereum;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.widget.Toast;
 
@@ -27,6 +28,7 @@ public class GoCore extends Service {
     OutputStream goCoreOutput;                              // OutPutStream to the Go Ethereum
     private GoCoreCallback goCoreCallback;                  // Interface to communicate with the Main Activity
     private final IBinder binder = new LocalBinder();
+    private String defauldCommand = null;
 
     // Class used for the client Binder.
     public class LocalBinder extends Binder {
@@ -75,8 +77,10 @@ public class GoCore extends Service {
      * these folders in the root and don't have premitions.
      */
     public void onStart(Intent intent, int startId) {
-
+        Bundle extras = intent.getExtras();
         try {
+
+            String startGethCmd;
             // geth command "geth"
             String gethCommand = getFilesDir() + "/geth ";
             // datadir folder path
@@ -85,8 +89,14 @@ public class GoCore extends Service {
             String ipcPath = "--ipcpath=" + getFilesDir() + "/datadir/geth.ipc ";
             // console option
             String console = "console";
+            if (extras != null) {
 
-            String startGethCmd = gethCommand + dataDir + ipcPath + console;
+                startGethCmd = gethCommand + dataDir + ipcPath + extras.get("defaultCommand") + " " + console;
+            } else {
+
+                startGethCmd = gethCommand + dataDir + ipcPath + console;
+            }
+
 
             goCore = Runtime.getRuntime().exec(startGethCmd);
 
@@ -159,4 +169,9 @@ public class GoCore extends Service {
         }
         super.onDestroy();
     }
+
+    public void setDefaultCommand(String command) {
+        this.defauldCommand = command;
+    }
+
 }

@@ -3,15 +3,33 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context=".main">
 
-    <item
-        android:id="@+id/keyboard_button"
-        android:icon="@drawable/keyboard"
-        android:title="@string/keyboard_title"
-        app:showAsAction="always" />
+
     <item
         android:id="@+id/myswitch"
         android:title=""
         app:actionLayout="@layout/switch_action_item"
         app:showAsAction="always" />
-
+    <item
+        android:id="@+id/output_button"
+        android:title="@string/log_title"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/popup"
+        android:title="more"
+        app:showAsAction="always">
+        <menu>
+            <item
+                android:id="@+id/run_with"
+                android:title="Run with " />
+            <item
+                android:id="@+id/erase_console"
+                android:title="Erase Console" />
+            <item
+                android:id="@+id/erase_log"
+                android:title="Erase Log" />
+            <item
+                android:id="@+id/erase_data"
+                android:title="Erase DataDir" />
+        </menu>
+    </item>
 </menu>

@@ -1,27 +1,35 @@
 package seedstars.goethereum;
 
 
+import android.app.DialogFragment;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Environment;
 import android.os.IBinder;
 
+import android.support.v4.app.FragmentActivity;
 import android.support.v4.view.MenuItemCompat;
+import android.support.v4.view.MotionEventCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.CompoundButton;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ViewFlipper;
+
+import org.w3c.dom.Text;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,7 +40,7 @@ import java.util.LinkedList;
 
 import seedstars.goethereum.components.CommandLine;
 
-public class MainActivity extends AppCompatActivity implements GoCoreCallback {
+public class MainActivity extends AppCompatActivity implements GoCoreCallback, CommandDialogFragment.CommandDialogListener {
 
     Intent intent;
     ViewFlipper viewFlipper;
@@ -49,6 +57,9 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
     boolean doScroll;                       // Should scroll view
     boolean goIsRunning;                    // True if Go Ethereum is running or false otherwise
     float lastX;                            // Last touch position
+
+    int lastTouchAction;                    // Last Touch Action
+    Switch switch_menu;                     // Switch button
 
 
     @Override
@@ -80,6 +91,14 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
         outputErrorView = (TextView) this.findViewById(R.id.errorOutput);
 
         scroll = (ScrollView) this.findViewById(R.id.command_line_scroll_view);
+
+        scroll.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, MotionEvent event) {
+                onTouchToKeyboardEvent(event);
+                return false;
+            }
+        });
+
         scrollErrOut = (ScrollView) this.findViewById(R.id.scroll_err_out);
 
         // Add the Go Binary and the genesis block to de source folder
@@ -110,9 +129,15 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
         startService(intent);
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
         goIsRunning = true;
-        //Show Keyboard
+    }
 
-        mgr.toggleSoftInput(1, 1);
+    public void startServiceWithCommand(String command) {
+
+        intent = new Intent(this, GoCore.class);
+        intent.putExtra("defaultCommand", command);
+        startService(intent);
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        goIsRunning = true;
     }
 
     /**
@@ -122,9 +147,6 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
         unbindService(serviceConnection);
         stopService(intent);
         goIsRunning = false;
-
-        // Hide Keyboard
-        mgr.toggleSoftInput(0, 0);
     }
 
     /**
@@ -154,18 +176,23 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
 
         MenuItem menuItem = menu.findItem(R.id.myswitch);
         View view = MenuItemCompat.getActionView(menuItem);
-        Switch switch_menu = (Switch) view.findViewById(R.id.switch_goCore);
+        switch_menu = (Switch) view.findViewById(R.id.switch_goCore);
         switch_menu.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
 
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked) {
-                    startService();
+                    if (!goIsRunning) {
+                        startService();
+                    }
                 } else {
-                    stopGethService();
+                    if (goIsRunning) {
+                        stopGethService();
+                    }
                 }
             }
         });
+
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -176,11 +203,43 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        if (id == R.id.keyboard_button) {
+        if (id == R.id.output_button) {
             // Show/Hide Keyboard
-            mgr.toggleSoftInput(1, 0);
+            if (viewFlipper.getDisplayedChild() == 0) {
+                item.setTitle(R.string.output_title);
+                viewFlipper.setInAnimation(this, R.anim.in_from_right);
+                viewFlipper.setOutAnimation(this, R.anim.out_to_left);
+                viewFlipper.showNext();
+            } else if (viewFlipper.getDisplayedChild() == 1) {
+                item.setTitle(R.string.log_title);
+                viewFlipper.setInAnimation(this, R.anim.in_from_left);
+                viewFlipper.setOutAnimation(this, R.anim.out_to_right);
+                viewFlipper.showPrevious();
+            }
         }
-
+        if (id == R.id.run_with) {
+            if (goIsRunning) {
+                Toast.makeText(this, "GoEthereun already running", Toast.LENGTH_LONG).show();
+            } else {
+                runWithDialog();
+            }
+        }
+        if (id == R.id.erase_data) {
+            if (!goIsRunning) {
+                File dir = new File(this.getFilesDir() + "/datadir/");
+                DeleteRecursive(dir);
+                Toast.makeText(this, "Data erased", Toast.LENGTH_LONG).show();
+            }
+            else {
+                Toast.makeText(this, "Can't erase datadir while the node is running", Toast.LENGTH_LONG).show();
+            }
+        }
+        if (id == R.id.erase_console) {
+            textView.setText(">");
+        }
+        if (id == R.id.erase_log) {
+            outputErrorView.setText("");
+        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -193,7 +252,7 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
         if (goIsRunning) {
             switch (keyCode) {
                 /**
-		 * When the user inserts a geth command, it is added to command history.
+                 * When the user inserts a geth command, it is added to command history.
                  */
                 case KeyEvent.KEYCODE_ENTER:
                     if (currentCommand.getCommandLine().length() != 0) {
@@ -248,7 +307,7 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
                  * Case Key 'W' is pressed.
                  *
                  * If the shortcut is off when 'W' is pressed, the default case is used on 'W'. 
-		 * Otherwise the default case isn't used and the shortcut is triggered.
+                 * Otherwise the default case isn't used and the shortcut is triggered.
                  *
                  * The shortcut for key 'W' accesses the last command in history.
                  * (Works kike the 'Key Up' in linux command line)
@@ -327,7 +386,6 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
                 MainActivity.this.scrollTextView();
             }
         });
-
     }
 
     /**
@@ -388,6 +446,46 @@ public class MainActivity extends AppCompatActivity implements GoCoreCallback {
         return false;
     }
 
+    public void onTouchToKeyboardEvent(MotionEvent touchevent) {
+        int action = MotionEventCompat.getActionMasked(touchevent);
+
+        switch (action) {
+            case (MotionEvent.ACTION_UP):
+                if (lastTouchAction == MotionEvent.ACTION_DOWN) {
+                    mgr.toggleSoftInput(1, 1);
+                }
+                lastTouchAction = MotionEvent.ACTION_DOWN;
+                break;
+            default:
+                lastTouchAction = action;
+        }
+    }
+
+    void DeleteRecursive(File fileOrDirectory) {
+        if (fileOrDirectory.isDirectory())
+            for (File child : fileOrDirectory.listFiles())
+                DeleteRecursive(child);
+
+        fileOrDirectory.delete();
+    }
+
+    public void runWithDialog() {
+        DialogFragment newFragment = new CommandDialogFragment();
+        newFragment.show(getFragmentManager(), "dialog");
+    }
+
+    public void onDialogPositiveClick(DialogFragment dialog) {
+        // User touched the dialog's positive button
+        TextView commandView = (TextView) dialog.getDialog().findViewById(R.id.command);
+        String command =  commandView.getText().toString();
+        startServiceWithCommand(command);
+        switch_menu.setChecked(true);
+    }
+
+    @Override
+    public void onDialogNegativeClick(DialogFragment dialog) {
+        // User touched the dialog's negative button
+    }
 }
 
 
